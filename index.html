@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b12">
+  <title>Lap Lab — FastF1 Replay</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <section class="welcome" id="welcomeScreen" aria-label="Lap Lab introduction">
+    <nav class="landing-nav" aria-label="Main navigation">
+      <div class="landing-logo"><span class="landing-logo-mark">◢</span> APEX <em>RACING</em></div>
+      <div class="landing-links">
+        <button type="button" class="active" id="navHome">Home</button>
+        <button type="button" id="navCars">Cars</button>
+        <button type="button" id="navTracks">Tracks</button>
+        <button type="button" id="navSimulator">Simulator</button>
+      </div>
+      <button type="button" class="landing-start" id="startRacingButton">Start racing →</button>
+    </nav>
+    <section class="landing-hero" aria-label="Racing simulator introduction">
+      <div class="hero-photo-stage">
+        <iframe class="hero-car-video" src="https://www.youtube-nocookie.com/embed/E2xEL_v-tAg?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=E2xEL_v-tAg&amp;playsinline=1&amp;rel=0" title="Mercedes-AMG ONE driving on track" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <div class="hero-photo-credit">Driving footage: <a href="https://www.youtube.com/watch?v=E2xEL_v-tAg" target="_blank" rel="noopener">AutoMotoTV on YouTube</a></div>
+      </div>
+      <div class="welcome-copy landing-hero-copy">
+        <div class="welcome-kicker">Next-gen racing simulator</div>
+        <h1>Feel the<br>speed<span>.</span></h1>
+        <p>Your track. Your machine. Your race.</p>
+        <div class="welcome-actions">
+          <button type="button" class="welcome-button" id="enterLabButton">Enter simulator →</button>
+        </div>
+      </div>
+    </section>
+    <div class="landing-stats" aria-label="Simulator features">
+      <div class="landing-stat"><span class="landing-stat-icon">⌁</span><div><strong>GPS TRACKS</strong><span>Real circuit layouts</span></div></div>
+      <div class="landing-stat"><span class="landing-stat-icon">◈</span><div><strong>LIVE REPLAY</strong><span>Recorded telemetry</span></div></div>
+      <div class="landing-stat"><span class="landing-stat-icon">◉</span><div><strong>DRIVER DATA</strong><span>Lap-by-lap analysis</span></div></div>
+    </div>
+    <section class="landing-features" id="landingFeatures">
+      <div class="landing-features-copy">
+        <div class="eyebrow">The real-session racing experience</div>
+        <h2>Built for the limit</h2>
+        <p>Choose an event and driver, follow the GPS circuit, then compare actual speed and lap times from FastF1 timing data.</p>
+        <div class="landing-feature-cards">
+          <div class="landing-feature"><b>Precision handling</b><span>Follow every bend on the recorded racing line.</span></div>
+          <div class="landing-feature"><b>Race-ready pace</b><span>Replay real session telemetry at your own speed.</span></div>
+          <div class="landing-feature"><b>Immersive tracks</b><span>Explore circuit maps from the selected event.</span></div>
+        </div>
+      </div>
+    </section>
+  </section>
+  <main class="app" id="lapLabApp" hidden>
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">↗</span> Apex / Lap Lab</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button type="button" class="welcome-button secondary" id="showIntroButton">Track intro</button>
+        <div class="source-pill"><span class="source-light"></span> FastF1 Data</div>
+      </div>
+    </header>
+
+    <section class="topline">
+      <div>
+        <div class="eyebrow">Real session · real telemetry</div>
+        <h1>F1 Lap <span>· Replay & Analysis</span></h1>
+        <p class="subtitle">Choose a season, Grand Prix, session and driver. Replay the fastest clean laps from the selected session and compare their real recorded telemetry.</p>
+      </div>
+      <div class="reference"><span>Reference</span><span id="referenceLabel">Fastest loaded lap</span><b id="referenceTime">—</b></div>
+    </section>
+
+    <section class="track-card" aria-label="F1 circuit and telemetry replay">
+      <div class="panel-heading">
+        <div>
+          <div class="track-title" id="trackTitle">Hungaroring</div>
+          <div class="track-subtitle" id="trackSubtitle">Choose a session to load its circuit map.</div>
+        </div>
+        <span class="session-badge" id="lapStatus">Awaiting data</span>
+      </div>
+      <div class="track-dashboard">
+        <div class="track-wrap">
+          <svg id="trackMap" viewBox="0 0 800 600" role="img" aria-label="Selected circuit map and moving lap marker">
+            <defs>
+              <linearGradient id="lapGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#70d7ff"/>
+                <stop offset="55%" stop-color="#377dff"/>
+                <stop offset="100%" stop-color="#70d7ff"/>
+              </linearGradient>
+              <filter id="glow" x="-300%" y="-300%" width="700%" height="700%"><feGaussianBlur stdDeviation="9"/></filter>
+              <filter id="tightGlow" x="-250%" y="-250%" width="600%" height="600%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="blueGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="13"/>
+              </filter>
+            </defs>
+            <text id="trackEmpty" x="400" y="300">Select a session and load FastF1 telemetry to draw the circuit.</text>
+            <polyline id="trackOutline" class="track-outline" points="" hidden/>
+            <polyline id="trackCore" class="track-core" points="" hidden/>
+            <polyline id="trackBlue" class="track-blue" points="" hidden/>
+            <polyline id="trackCenter" class="track-center" points="" hidden/>
+            <polyline id="trackHighlight" class="track-highlight" points="" hidden/>
+            <g id="corners"></g>
+            <circle id="markerGlow" r="16" cx="0" cy="0" hidden/>
+            <circle id="marker" r="6" cx="0" cy="0" hidden/>
+          </svg>
+          <div class="track-overview" id="trackOverview" aria-label="Dotted circuit overview" hidden>
+            <div class="track-overview-label">Track overview</div>
+            <svg id="overviewMap" viewBox="0 0 800 600" aria-hidden="true">
+              <polyline id="overviewTrack" points=""/>
+            </svg>
+          </div>
+        </div>
+        <aside class="telemetry" aria-label="Actual selected-lap telemetry">
+          <div class="lap-clock">
+            <span class="metric-label">Actual lap time</span>
+            <strong class="clock" id="lapTimeValue">—</strong>
+            <span class="clock-meta" id="clockMeta">FastF1 recorded lap</span>
+            <div class="progress" role="progressbar" aria-label="Lap replay progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressMeter"><span id="progressBar"></span></div>
+          </div>
+          <div class="metric"><div class="metric-label">Speed</div><div class="metric-value"><span id="speedValue">—</span> <span class="metric-unit">km/h</span></div></div>
+          <div class="metric"><div class="metric-label">Throttle</div><div class="metric-value"><span id="throttleValue">—</span><span class="metric-unit">%</span></div></div>
+          <div class="metric"><div class="metric-label">Brake</div><div class="metric-value"><span id="brakeValue">—</span></div></div>
+          <div class="metric"><div class="metric-label">Gear</div><div class="metric-value"><span id="gearValue">—</span></div></div>
+          <div class="track-legend"><span class="legend-line"></span>The glowing marker follows FastF1 GPS samples. Turn numbers are from FastF1 circuit data when available.</div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="FastF1 session selection">
+      <div class="section-heading">
+        <div>
+          <h2>Choose a real session</h2>
+          <p>FastF1 downloads and caches data on first use. Internet access is required.</p>
+        </div>
+      </div>
+      <div class="select-grid">
+        <label class="field"><span class="field-label">Season</span><select id="yearSelect"><option value="2024">2024</option></select></label>
+        <label class="field"><span class="field-label">Grand Prix</span><select id="eventSelect" disabled><option>Loading events…</option></select></label>
+        <label class="field"><span class="field-label">Session</span><select id="sessionSelect" disabled><option>Select session</option></select></label>
+        <label class="field"><span class="field-label">Driver</span><select id="driverSelect" disabled><option>Select driver</option></select></label>
+      </div>
+      <div class="setup-bottom">
+        <div class="pace-set">
+          <span class="field-label">Replay pace (visual playback only)</span>
+          <div class="pace-options" role="group" aria-label="Replay playback speed">
+            <button type="button" class="pace-option" data-rate="8" aria-pressed="false">Fast · 8×</button>
+            <button type="button" class="pace-option" data-rate="4" aria-pressed="true">Normal · 4×</button>
+            <button type="button" class="pace-option" data-rate="2" aria-pressed="false">Slow · 2×</button>
+          </div>
+        </div>
+        <label class="field"><span class="field-label">Laps to compare</span>
+          <select id="lapCount"><option value="1">1 fastest lap</option><option value="3">3 fastest laps</option><option value="5" selected>5 fastest laps</option><option value="10">10 fastest laps</option></select>
+        </label>
+        <button type="button" class="action-button" id="loadButton" disabled>Load real lap data</button>
+      </div>
+      <div class="status-line" id="statusLine" role="status" aria-live="polite">Connecting to the local FastF1 service…</div>
+    </section>
+
+    <section class="panel controls" aria-label="Replay controls">
+      <div>
+        <div class="section-heading" style="margin:0">
+          <div><h2 id="controlsTitle">Replay controls</h2><p id="controlsHint">Load data to enable the replay.</p></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="action-button secondary" id="pauseButton" disabled>Pause</button>
+        <button type="button" class="action-button" id="startButton" disabled>Start replay</button>
+      </div>
+    </section>
+
+    <section class="panel results" id="resultsPanel" aria-label="Analysis of loaded real laps" aria-live="polite" hidden>
+      <div class="results-heading">
+        <div><h2>Session analysis</h2><p id="resultsSubheading">Fastest laps from the selected driver</p></div>
+        <span class="session-badge">FastF1 timing</span>
+      </div>
+      <div class="grade-table-wrap">
+        <table class="grade-table">
+          <thead><tr><th>Lap</th><th>Pace level</th><th>Speed level</th><th>Consistency level</th></tr></thead>
+          <tbody id="lapGradesBody"></tbody>
+        </table>
+        <p class="grade-note">Levels are calculated from the selected laps: pace gap, average sampled speed, and sector-time balance. With one lap, comparison levels are limited.</p>
+      </div>
+      <div class="results-content">
+        <div class="result-bars"><h3>Recorded lap-time comparison</h3><div id="lapBars"></div></div>
+        <article class="analysis-box">
+          <h3>Driving analysis</h3>
+          <p id="analysisText"></p>
+          <div class="analysis-stats">
+            <div class="analysis-stat"><span>Average lap</span><b id="averageLap">—</b></div>
+            <div class="analysis-stat"><span>Fastest lap</span><b id="fastestLap">—</b></div>
+            <div class="analysis-stat"><span>Average speed</span><b id="averageSpeed">—</b></div>
+            <div class="analysis-stat"><span>Peak speed</span><b id="peakSpeed">—</b></div>
+          </div>
+          <div class="note">Lap times and car telemetry are sourced from the selected FastF1 session. Analysis is calculated from the downloaded laps; GPS position and turn labels depend on available source data.</div>
+        </article>
+      </div>
+    </section>
+
+    <footer><span>Local-only viewer · FastF1 historical timing and telemetry · Cached on this computer</span><span>FastF1 is a community Python package and is not affiliated with Formula 1.</span></footer>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>

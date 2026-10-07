@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: apex-lap-lab
+    runtime: python
+    plan: starter
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python api_server.py
+    healthCheckPath: /api/status
+    autoDeploy: true
+    disk:
+      name: fastf1-cache
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: FASTF1_CACHE_DIR
+        value: /var/data/fastf1_cache
