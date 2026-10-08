@@ -238,3 +238,19 @@
     .bar-fill { background: linear-gradient(90deg,#ff8990,#e51a2d); }
     .landing-features { background: radial-gradient(ellipse at 17% 55%,rgba(105,12,23,.22),transparent 38%),#080607; }
     .landing-feature { background: rgba(18,8,10,.8); }
+
+    .welcome, .landing-nav { background-color: #080607; }
+    .landing-nav { border-bottom-color: rgba(255,55,70,.2); }
+    .landing-logo-mark { color: #ff2438; }
+    .landing-logo em, .landing-hero-copy .welcome-kicker, .landing-features-copy .eyebrow { color: #ff4352; }
+    .landing-links button:hover, .landing-links button.active { border-bottom-color: #ff2438; color: #ff4352; }
+    .landing-start { background: #e51a2d; color: #fff5f5; }
+    .landing-hero { background: linear-gradient(100deg,#080607 0%,rgba(18,7,9,.86) 37%,rgba(25,8,11,.2) 100%); }
+    .hero-photo-stage { background-color: #10090a; }
+    .landing-hero-copy h1 span { color: #ff2438; }
+    .welcome-button { border-color: #ff2438; background: #d91429; color: #fff5f5; box-shadow: 0 0 28px rgba(221,20,41,.22); }
+    .landing-stats { border-color: rgba(255,55,70,.17); background: #0b0708; }
+    .landing-stat { border-color: rgba(255,55,70,.22); }
+    .landing-stat-icon { color: #ff3448; }
+    .landing-feature { border-color: rgba(255,55,70,.2); }
+    button:focus-visible, select:focus-visible { outline-color: #ff4352; }
