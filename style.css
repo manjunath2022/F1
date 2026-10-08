@@ -207,3 +207,34 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; }
     }
+    :root {
+      background: #080607;
+      --muted: #969198;
+      --line: rgba(255,55,70,.18);
+      --orange: #ff2438;
+      --cyan: #ff4352;
+    }
+    body { background: radial-gradient(ellipse at 48% 34%,rgba(115,9,21,.2),transparent 55%),#080607; }
+    .brand-mark { border-color: rgba(255,55,70,.45); }
+    .reference, .track-overview { background: rgba(18,8,10,.9); }
+    .track-card, .panel { background: linear-gradient(145deg,rgba(25,12,14,.96),rgba(8,7,8,.98)); }
+    .track-wrap { background-image: radial-gradient(rgba(255,55,70,.16) .7px,transparent .7px); }
+    #overviewTrack, .track-blue { stroke: #ff2438; }
+    .track-center { stroke: #ff6975; }
+    .f1-car-body { fill: #e5172b; stroke: #ffe5e7; }
+    .f1-car-detail { fill: #ff8990; }
+    .f1-car-cockpit { fill: #120608; stroke: #ff5260; }
+    .f1-car-wheel { stroke: #9b6970; }
+    .telemetry { background: rgba(10,7,8,.76); }
+    .progress { background: #291216; }
+    .legend-line { background: linear-gradient(90deg,#ff8990,#ff2438,#b90e21); }
+    .welcome-button.secondary { background: rgba(12,8,9,.72); color: #e4dfe1; }
+    select, .action-button, .pace-option { background-color: #10090a; }
+    .pace-option[aria-pressed="true"] { background: rgba(255,36,56,.12); }
+    .action-button { color: #fff5f5; }
+    .action-button.secondary { background: #160d0f; color: #e3dfe1; }
+    .grade-table-wrap, .result-bars, .analysis-box { background: rgba(10,7,8,.72); }
+    .bar-track { background: #211014; }
+    .bar-fill { background: linear-gradient(90deg,#ff8990,#e51a2d); }
+    .landing-features { background: radial-gradient(ellipse at 17% 55%,rgba(105,12,23,.22),transparent 38%),#080607; }
+    .landing-feature { background: rgba(18,8,10,.8); }
