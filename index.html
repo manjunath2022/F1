@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#080b12">
+  <meta name="theme-color" content="#080607">
   <title>Lap Lab — FastF1 Replay</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -21,7 +21,7 @@
     </nav>
     <section class="landing-hero" aria-label="Racing simulator introduction">
       <div class="hero-photo-stage">
-        <iframe class="hero-car-video" src="https://www.youtube-nocookie.com/embed/E2xEL_v-tAg?autoplay=1&amp;mute=1&amp;controls=0&amp;loop=1&amp;playlist=E2xEL_v-tAg&amp;playsinline=1&amp;rel=0" title="Mercedes-AMG ONE driving on track" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        <iframe id="heroVideo" class="hero-car-video" src="https://www.youtube.com/embed/E2xEL_v-tAg?autoplay=1&amp;mute=1&amp;controls=1&amp;loop=1&amp;playlist=E2xEL_v-tAg&amp;playsinline=1" title="Mercedes-AMG ONE driving on track" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
         <div class="hero-photo-credit">Driving footage: <a href="https://www.youtube.com/watch?v=E2xEL_v-tAg" target="_blank" rel="noopener">AutoMotoTV on YouTube</a></div>
       </div>
       <div class="welcome-copy landing-hero-copy">
@@ -82,9 +82,9 @@
           <svg id="trackMap" viewBox="0 0 800 600" role="img" aria-label="Selected circuit map and moving lap marker">
             <defs>
               <linearGradient id="lapGradient" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#70d7ff"/>
-                <stop offset="55%" stop-color="#377dff"/>
-                <stop offset="100%" stop-color="#70d7ff"/>
+                <stop offset="0%" stop-color="#ff8990"/>
+                <stop offset="55%" stop-color="#ff2438"/>
+                <stop offset="100%" stop-color="#b90e21"/>
               </linearGradient>
               <filter id="glow" x="-300%" y="-300%" width="700%" height="700%"><feGaussianBlur stdDeviation="9"/></filter>
               <filter id="tightGlow" x="-250%" y="-250%" width="600%" height="600%">
@@ -151,7 +151,7 @@
           </div>
         </div>
         <label class="field"><span class="field-label">Laps to compare</span>
-          <select id="lapCount"><option value="1">1 fastest lap</option><option value="3">3 fastest laps</option><option value="5" selected>5 fastest laps</option><option value="10">10 fastest laps</option></select>
+          <select id="lapCount"><option value="1" selected>1 fastest lap</option><option value="3">3 fastest laps</option><option value="5">5 fastest laps</option><option value="10">10 fastest laps</option></select>
         </label>
         <button type="button" class="action-button" id="loadButton" disabled>Load real lap data</button>
       </div>
@@ -192,9 +192,54 @@
             <div class="analysis-stat"><span>Fastest lap</span><b id="fastestLap">—</b></div>
             <div class="analysis-stat"><span>Average speed</span><b id="averageSpeed">—</b></div>
             <div class="analysis-stat"><span>Peak speed</span><b id="peakSpeed">—</b></div>
+            <div class="analysis-stat"><span>Average throttle</span><b id="averageThrottle">—</b></div>
+            <div class="analysis-stat"><span>Full throttle samples</span><b id="fullThrottle">—</b></div>
+            <div class="analysis-stat"><span>Braking samples</span><b id="brakingShare">—</b></div>
+            <div class="analysis-stat"><span>DRS active samples</span><b id="drsShare">—</b></div>
+            <div class="analysis-stat"><span>Upshifts</span><b id="upshifts">—</b></div>
+            <div class="analysis-stat"><span>Downshifts</span><b id="downshifts">—</b></div>
           </div>
-          <div class="note">Lap times and car telemetry are sourced from the selected FastF1 session. Analysis is calculated from the downloaded laps; GPS position and turn labels depend on available source data.</div>
         </article>
+      </div>
+      <div class="telemetry-panel">
+        <h3>Sector telemetry</h3>
+        <div class="grade-table-wrap">
+          <table class="grade-table">
+            <thead><tr><th>Sector</th><th>Best time</th><th>Average speed</th><th>Peak speed</th><th>Average throttle</th><th>Braking samples</th></tr></thead>
+            <tbody id="sectorAnalysisBody"></tbody>
+          </table>
+        </div>
+        <p class="note">Timing, speed, throttle, braking, gear, DRS, driver, team and event are from the selected FastF1 session when available. Percentages summarize returned telemetry samples; sector telemetry is split using recorded sector times. This app calculates the comparisons—it does not present official FIA analysis or ratings. FastF1 is a community package, not affiliated with Formula 1.</p>
+      </div>
+      <div class="telemetry-panel physics-panel">
+        <h3>Vehicle physics estimate</h3>
+        <p class="note physics-intro">Change the assumed masses and drag area to see how the selected lap speeds translate into estimated forces and energy. These are editable model inputs, not official driver or car specifications.</p>
+        <div class="physics-inputs">
+          <label class="field">
+            <span class="field-label">Driver + equipment mass (kg)</span>
+            <input id="driverMassInput" type="number" min="35" max="120" step="0.5" value="80" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span class="field-label">Car mass, excluding driver (kg)</span>
+            <input id="carMassInput" type="number" min="500" max="1000" step="1" value="700" inputmode="decimal">
+          </label>
+          <label class="field">
+            <span class="field-label">Drag area CdA (m²)</span>
+            <input id="dragAreaInput" type="number" min="0.3" max="2.5" step="0.01" value="1.00" inputmode="decimal">
+          </label>
+        </div>
+        <p class="physics-status" id="physicsStatus" role="status" aria-live="polite"></p>
+        <div class="physics-stats">
+          <div class="analysis-stat"><span>Modeled total mass</span><b id="modeledMass">—</b></div>
+          <div class="analysis-stat"><span>System kinetic energy at peak speed</span><b id="systemKineticEnergy">—</b></div>
+          <div class="analysis-stat"><span>Driver-mass energy at peak speed</span><b id="driverKineticEnergy">—</b></div>
+          <div class="analysis-stat"><span>Average estimated aero drag</span><b id="averageDrag">—</b></div>
+          <div class="analysis-stat"><span>Peak estimated aero drag</span><b id="peakDrag">—</b></div>
+          <div class="analysis-stat"><span>Peak estimated drag power</span><b id="peakDragPower">—</b></div>
+          <div class="analysis-stat"><span>Sampled longitudinal acceleration</span><b id="sampledAcceleration">—</b></div>
+          <div class="analysis-stat"><span>Mass × sampled acceleration</span><b id="sampledInertialForce">—</b></div>
+        </div>
+        <p class="note">Model: drag = ½ × air density (1.225 kg/m³) × CdA × speed²; drag power = drag × speed. The sampled inertial force is modeled mass × estimated acceleration; it is not engine output. Mass affects kinetic energy and this inertial-force estimate, not the drag formula. Acceleration is a rough estimate from adjacent sampled speed values. Wind, downforce/ride-height maps, tire effects, road grade, fuel load, actual driver mass and actual car setup are not supplied by this dataset.</p>
       </div>
     </section>
 

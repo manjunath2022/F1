@@ -9,7 +9,11 @@
         "corners", "marker", "markerGlow", "lapTimeValue", "clockMeta", "speedValue", "throttleValue",
         "brakeValue", "gearValue", "progressMeter", "progressBar", "resultsPanel",
         "resultsSubheading", "lapBars", "lapGradesBody", "analysisText", "averageLap", "fastestLap",
-        "averageSpeed", "peakSpeed", "controlsHint", "welcomeScreen", "lapLabApp",
+        "averageSpeed", "peakSpeed", "averageThrottle", "fullThrottle", "brakingShare", "drsShare",
+        "upshifts", "downshifts", "sectorAnalysisBody", "controlsHint", "welcomeScreen", "lapLabApp",
+        "driverMassInput", "carMassInput", "dragAreaInput", "physicsStatus", "modeledMass",
+        "systemKineticEnergy", "driverKineticEnergy", "averageDrag", "peakDrag", "peakDragPower",
+        "sampledAcceleration", "sampledInertialForce",
         "enterLabButton", "showIntroButton",
         "navHome", "navCars",
         "navTracks", "navSimulator", "startRacingButton", "landingFeatures"
@@ -23,6 +27,7 @@
       let previousFrame = 0;
       let animationFrame = 0;
       let trackPoints = [];
+      const airDensity = 1.225;
 
       function setStatus(message, error = false) {
         els.statusLine.textContent = message;
@@ -34,7 +39,15 @@
       }
 
       async function getJson(url) {
-        const response = await fetch(url);
+        let response;
+        try {
+          response = await fetch(url);
+        } catch (error) {
+          if (error instanceof TypeError) {
+            throw new Error("Could not connect to the FastF1 server. The free Render service may be waking up, or the connection was interrupted. Check your internet, wait a minute, and try again.");
+          }
+          throw error;
+        }
         const contentType = response.headers.get("content-type") || "";
         if (!contentType.includes("application/json")) {
           throw new Error("The local server returned a web page instead of API data. Restart the app with start_lap_lab.bat and try again.");
@@ -336,22 +349,189 @@
         const fastest = Math.min(...times);
         const slowest = Math.max(...times);
         const mean = times.reduce((sum, time) => sum + time, 0) / times.length;
-        const peak = Math.max(...data.laps.flatMap(lap => lap.points.map(point => point.speed ?? 0)));
-        const average = data.laps.reduce((sum, lap) => {
-          const speeds = lap.points.map(point => point.speed ?? 0);
-          return sum + speeds.reduce((total, speed) => total + speed, 0) / speeds.length;
-        }, 0) / data.laps.length;
+        const points = data.laps.flatMap(lap => lap.points);
+        const speeds = points.map(point => point.speed).filter(Number.isFinite);
+        const throttle = points.map(point => point.throttle).filter(Number.isFinite);
+        const brakes = points.map(point => point.brake).filter(value => value !== null && value !== undefined);
+        const drs = points.map(point => point.drs).filter(Number.isFinite);
+        const gears = points.map(point => point.gear).filter(Number.isFinite);
+        const peak = speeds.length ? Math.max(...speeds) : 0;
+        const average = speeds.length ? speeds.reduce((sum, speed) => sum + speed, 0) / speeds.length : 0;
+        const averageThrottleValue = throttle.length
+          ? throttle.reduce((sum, value) => sum + value, 0) / throttle.length
+          : null;
+        const fullThrottlePercent = throttle.length
+          ? throttle.filter(value => value >= 95).length / throttle.length * 100
+          : null;
+        const brakingPercent = brakes.length
+          ? brakes.filter(value => value === true || (Number.isFinite(Number(value)) && Number(value) > 0)).length / brakes.length * 100
+          : null;
+        const drsPercent = drs.length ? drs.filter(value => value >= 10).length / drs.length * 100 : null;
+        let upshiftCount = 0;
+        let downshiftCount = 0;
+        for (const lap of data.laps) {
+          let previousGear = null;
+          for (const point of lap.points) {
+            if (!Number.isFinite(point.gear)) continue;
+            if (previousGear !== null && point.gear !== previousGear) {
+              if (point.gear > previousGear) upshiftCount++;
+              else downshiftCount++;
+            }
+            previousGear = point.gear;
+          }
+        }
         const fastestLap = data.laps.find(lap => lap.timeMs === fastest);
         const spread = (slowest - fastest) / 1000;
-        els.resultsSubheading.textContent = `${data.driverName} · ${data.event} · ${data.session} · ${data.laps.length} fastest accurate laps`;
+        const sessionDetails = [data.team, data.location, data.event, data.year, data.session]
+          .filter(Boolean).join(" · ");
+        els.resultsSubheading.textContent = `${data.driverName} · ${sessionDetails} · ${data.laps.length} fastest accurate laps`;
         els.averageLap.textContent = formatTime(mean);
         els.fastestLap.textContent = formatTime(fastest);
-        els.averageSpeed.textContent = `${Math.round(average)} km/h`;
-        els.peakSpeed.textContent = `${Math.round(peak)} km/h`;
-        els.analysisText.textContent = `${data.driverName}'s fastest selected lap was lap ${fastestLap.lapNumber ?? "—"} at ${formatTime(fastest)}. The selected-lap average was ${formatTime(mean)}. Peak recorded speed was ${Math.round(peak)} km/h and mean sampled speed was ${Math.round(average)} km/h. The fastest-to-slowest spread was ${spread.toFixed(3)} seconds. This comparison uses the actual selected session's accurate laps; it is not a prediction of race pace.`;
+        els.averageSpeed.textContent = speeds.length ? `${Math.round(average)} km/h` : "Unavailable";
+        els.peakSpeed.textContent = speeds.length ? `${Math.round(peak)} km/h` : "Unavailable";
+        els.averageThrottle.textContent = averageThrottleValue === null ? "Unavailable" : `${Math.round(averageThrottleValue)}%`;
+        els.fullThrottle.textContent = fullThrottlePercent === null ? "Unavailable" : `${Math.round(fullThrottlePercent)}%`;
+        els.brakingShare.textContent = brakingPercent === null ? "Unavailable" : `${Math.round(brakingPercent)}%`;
+        els.drsShare.textContent = drsPercent === null ? "Unavailable" : `${Math.round(drsPercent)}%`;
+        els.upshifts.textContent = gears.length ? String(upshiftCount) : "Unavailable";
+        els.downshifts.textContent = gears.length ? String(downshiftCount) : "Unavailable";
+        const channelSummary = [
+          `mean throttle ${averageThrottleValue === null ? "unavailable" : `${Math.round(averageThrottleValue)}%`}`,
+          `full throttle ${fullThrottlePercent === null ? "unavailable" : `${Math.round(fullThrottlePercent)}%`}`,
+          `braking ${brakingPercent === null ? "unavailable" : `${Math.round(brakingPercent)}%`}`,
+          `DRS active ${drsPercent === null ? "unavailable" : `${Math.round(drsPercent)}%`}`
+        ].join(", ");
+        els.analysisText.textContent = `${data.driverName}'s fastest selected lap was lap ${fastestLap.lapNumber ?? "—"} at ${formatTime(fastest)}; the selected-lap average was ${formatTime(mean)} (spread ${spread.toFixed(3)} s). Across the sampled laps, peak/mean speed was ${Math.round(peak)}/${Math.round(average)} km/h; ${channelSummary}. Sampled gear changes: ${upshiftCount} upshifts and ${downshiftCount} downshifts.`;
+        renderSectorAnalysis(data);
+        renderPhysicsAnalysis(data);
         renderLapGrades(data);
         renderBars(data);
         els.resultsPanel.hidden = false;
+      }
+
+      function renderPhysicsAnalysis(data) {
+        const modelInputs = [
+          { element: els.driverMassInput, label: "Driver + equipment mass", min: 35, max: 120 },
+          { element: els.carMassInput, label: "Car mass", min: 500, max: 1000 },
+          { element: els.dragAreaInput, label: "Drag area", min: 0.3, max: 2.5 }
+        ];
+        const invalid = modelInputs.filter(({ element, min, max }) => {
+          const value = Number(element.value);
+          return !Number.isFinite(value) || value < min || value > max;
+        });
+        modelInputs.forEach(({ element, min, max }) => {
+          const value = Number(element.value);
+          element.setAttribute("aria-invalid", String(!Number.isFinite(value) || value < min || value > max));
+        });
+        if (invalid.length) {
+          els.physicsStatus.textContent = `Enter valid values for ${invalid.map(input => input.label).join(", ")}.`;
+          for (const id of [
+            "modeledMass", "systemKineticEnergy", "driverKineticEnergy", "averageDrag",
+            "peakDrag", "peakDragPower", "sampledAcceleration", "sampledInertialForce"
+          ]) els[id].textContent = "—";
+          return;
+        }
+
+        els.physicsStatus.textContent = "Using editable model inputs and standard air density (1.225 kg/m³).";
+        const driverMass = Number(els.driverMassInput.value);
+        const totalMass = driverMass + Number(els.carMassInput.value);
+        const dragArea = Number(els.dragAreaInput.value);
+        const lapSamples = data.laps.flatMap(lap =>
+          (lap.points || []).map(point => ({ point, lapTimeMs: lap.timeMs }))
+        );
+        const speedSamples = lapSamples
+          .map(({ point }) => point.speed)
+          .filter(speed => Number.isFinite(speed) && speed >= 0)
+          .map(speed => speed / 3.6);
+
+        if (!speedSamples.length) {
+          els.physicsStatus.textContent = "No valid speed samples are available to calculate the physics estimates.";
+          for (const id of [
+            "modeledMass", "systemKineticEnergy", "driverKineticEnergy", "averageDrag",
+            "peakDrag", "peakDragPower", "sampledAcceleration", "sampledInertialForce"
+          ]) els[id].textContent = "Unavailable";
+          return;
+        }
+
+        const peakSpeed = Math.max(...speedSamples);
+        const dragForces = speedSamples.map(speed => 0.5 * airDensity * dragArea * speed ** 2);
+        const averageForce = dragForces.reduce((sum, force) => sum + force, 0) / dragForces.length;
+        const peakForce = Math.max(...dragForces);
+        const peakPower = Math.max(...dragForces.map((force, index) => force * speedSamples[index]));
+        let peakAcceleration = 0;
+        let peakDeceleration = 0;
+        let hasAcceleration = false;
+        for (const lap of data.laps) {
+          const points = lap.points || [];
+          for (let index = 1; index < points.length; index++) {
+            const previous = points[index - 1];
+            const current = points[index];
+            const elapsed = (current.t - previous.t) * lap.timeMs / 1000;
+            if (!Number.isFinite(previous.speed) || !Number.isFinite(current.speed) ||
+                !Number.isFinite(elapsed) || elapsed <= 0) continue;
+            const acceleration = (current.speed - previous.speed) / 3.6 / elapsed;
+            peakAcceleration = Math.max(peakAcceleration, acceleration);
+            peakDeceleration = Math.min(peakDeceleration, acceleration);
+            hasAcceleration = true;
+          }
+        }
+
+        els.modeledMass.textContent = `${totalMass.toFixed(1)} kg`;
+        els.systemKineticEnergy.textContent = `${(0.5 * totalMass * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
+        els.driverKineticEnergy.textContent = `${(0.5 * driverMass * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
+        els.averageDrag.textContent = `${Math.round(averageForce)} N`;
+        els.peakDrag.textContent = `${Math.round(peakForce)} N`;
+        els.peakDragPower.textContent = `${(peakPower / 1000).toFixed(1)} kW`;
+        els.sampledAcceleration.textContent = hasAcceleration
+          ? `+${(peakAcceleration / 9.80665).toFixed(2)} / ${(peakDeceleration / 9.80665).toFixed(2)} g`
+          : "Unavailable";
+        els.sampledInertialForce.textContent = hasAcceleration
+          ? `${Math.round(totalMass * Math.max(peakAcceleration, Math.abs(peakDeceleration)))} N`
+          : "Unavailable";
+      }
+
+      function renderSectorAnalysis(data) {
+        els.sectorAnalysisBody.replaceChildren();
+        for (let sectorIndex = 0; sectorIndex < 3; sectorIndex++) {
+          const sectorTimes = data.laps.map(lap => lap.sectorTimesMs?.[sectorIndex]).filter(Number.isFinite);
+          const bestSector = sectorTimes.length ? Math.min(...sectorTimes) : null;
+          const sectorPoints = [];
+
+          for (const lap of data.laps) {
+            const lapTime = lap.timeMs;
+            const sectorTime = lap.sectorTimesMs?.[sectorIndex];
+            const points = lap.points || [];
+            if (!Number.isFinite(lapTime) || !Number.isFinite(sectorTime) || !points.length) continue;
+            const start = lap.sectorTimesMs.slice(0, sectorIndex).reduce((sum, value) =>
+              sum + (Number.isFinite(value) ? value : 0), 0) / lapTime;
+            const end = start + sectorTime / lapTime;
+            sectorPoints.push(...points.filter(point =>
+              Number.isFinite(point.t) && point.t >= start && (sectorIndex === 2 ? point.t <= end + 0.02 : point.t < end)
+            ));
+          }
+
+          const sectorSpeeds = sectorPoints.map(point => point.speed).filter(Number.isFinite);
+          const sectorThrottles = sectorPoints.map(point => point.throttle).filter(Number.isFinite);
+          const sectorBrakes = sectorPoints.map(point => point.brake).filter(value => value !== null && value !== undefined);
+          const brakePercent = sectorBrakes.length
+            ? sectorBrakes.filter(value => value === true || (Number.isFinite(Number(value)) && Number(value) > 0)).length / sectorBrakes.length * 100
+            : null;
+          const values = [
+            `S${sectorIndex + 1}`,
+            bestSector === null ? "Unavailable" : formatTime(bestSector),
+            sectorSpeeds.length ? `${Math.round(sectorSpeeds.reduce((sum, value) => sum + value, 0) / sectorSpeeds.length)} km/h` : "Unavailable",
+            sectorSpeeds.length ? `${Math.round(Math.max(...sectorSpeeds))} km/h` : "Unavailable",
+            sectorThrottles.length ? `${Math.round(sectorThrottles.reduce((sum, value) => sum + value, 0) / sectorThrottles.length)}%` : "Unavailable",
+            brakePercent === null ? "Unavailable" : `${Math.round(brakePercent)}%`
+          ];
+          const row = document.createElement("tr");
+          values.forEach(value => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+          els.sectorAnalysisBody.append(row);
+        }
       }
 
       function finishLap() {
@@ -397,7 +577,7 @@
         params.set("count", els.lapCount.value);
         els.loadButton.disabled = true;
         els.loadButton.textContent = "Loading telemetry…";
-        setStatus("Downloading and processing real FastF1 telemetry. The first load can take a few minutes.");
+        setStatus("Downloading real FastF1 telemetry. The first request can take 1–2 minutes on the free server; keep this page open.");
         els.resultsPanel.hidden = true;
         try {
           const data = await getJson(`/api/laps?${params}`);
@@ -483,6 +663,11 @@
         els.loadButton.disabled = false;
       });
       els.loadButton.addEventListener("click", loadLapData);
+      [els.driverMassInput, els.carMassInput, els.dragAreaInput].forEach(input =>
+        input.addEventListener("input", () => {
+          if (selectedData && !els.resultsPanel.hidden) renderPhysicsAnalysis(selectedData);
+        })
+      );
       els.enterLabButton.addEventListener("click", enterLapLab);
       els.showIntroButton.addEventListener("click", showIntro);
       els.startRacingButton.addEventListener("click", enterLapLab);
