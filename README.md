@@ -26,18 +26,28 @@ to reduce the initial response size. Data is cached in `fastf1_cache`.
 
 ## Vehicle physics estimates
 
-After replaying a lap, the analysis includes editable driver/equipment mass,
-car mass, and drag-area (CdA) inputs. It uses FastF1 speed samples to estimate
-kinetic energy, aerodynamic drag, drag power, sampled longitudinal
-acceleration, and a mass-times-acceleration force estimate. Driver mass and
-car setup are not included in FastF1 telemetry;
-the displayed default values are illustrative model inputs, not official
-specifications. The model assumes standard air density and does not account
-for wind, track gradient, or detailed aero and tire behavior.
+During replay, the sidebar shows the current speed, throttle, brake, gear, DRS,
+time, acceleration, drag, downforce, drag power, kinetic energy, and inertial
+force estimates. A complete per-sample table is available for each loaded lap,
+and **Export CSV** saves the selected telemetry and calculated values for all
+loaded laps. FastF1 data is sampled (up to 1,200 points per lap here), not a
+private raw ECU feed.
 
-For a small standalone version of the same calculations, run
-`python vehicle_physics.py` and enter comma-separated speed samples and the
-model inputs when prompted. No extra packages are needed for that script.
+The live model has editable driver/equipment mass, car mass, drag area (CdA),
+downforce area (ClA), and air density. It calculates drag = ½ρ(CdA)v²,
+downforce = ½ρ(ClA)v², drag power = drag × speed, kinetic energy = ½mv²,
+acceleration = Δv/Δt, and inertial force = mass × acceleration. The default
+inputs are illustrative, not actual driver weights or team car setup. Wind,
+DRS aero maps, ride height, road grade, fuel load, and tire behavior are not
+available, so aerodynamic values are estimates, not official figures.
+
+To recalculate the exported samples with the standalone Python program, use:
+
+```powershell
+python vehicle_physics.py 2024-NOR-telemetry-physics.csv --driver-mass 80 --car-mass 700 --cda 1.0 --cla 3.0 --air-density 1.225 --output calculated.csv
+```
+
+The script uses only the Python standard library.
 
 ## Deploy on Render's free plan
 
@@ -62,6 +72,6 @@ site independently, but free-plan spin-down means it is not guaranteed to stay
 awake continuously. Visitors need internet access, and the FastF1 API fetches
 data from upstream sources when it is not already cached.
 
-The landing-page Formula 1 footage is embedded from the official Formula 1
-YouTube channel, showing the requested section from 0:08 to 0:23. Autoplay may
-be blocked by some browsers.
+The landing-page hero uses a still image of the Mercedes-AMG ONE from the
+credited AutoMotoTV YouTube video. The image is served locally from
+`amg-one-hero.jpg`; the credit links to the original video.

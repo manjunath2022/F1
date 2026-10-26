@@ -7,12 +7,17 @@
         "trackMap", "trackEmpty", "trackOutline", "trackCore", "trackBlue", "trackCenter", "trackHighlight",
         "trackOverview", "overviewMap", "overviewTrack",
         "corners", "marker", "markerGlow", "lapTimeValue", "clockMeta", "speedValue", "throttleValue",
-        "brakeValue", "gearValue", "progressMeter", "progressBar", "resultsPanel",
+        "brakeValue", "gearValue", "drsValue", "sampleTimeValue", "liveAcceleration", "liveDrag",
+        "liveDownforce", "liveDragPower", "liveKineticEnergy", "liveInertialForce",
+        "progressMeter", "progressBar", "resultsPanel", "sampleTelemetryPanel",
+        "sampleTelemetrySummary", "sampleTelemetryBody", "sampleLapSelect", "exportTelemetryButton",
         "resultsSubheading", "lapBars", "lapGradesBody", "analysisText", "averageLap", "fastestLap",
         "averageSpeed", "peakSpeed", "averageThrottle", "fullThrottle", "brakingShare", "drsShare",
         "upshifts", "downshifts", "sectorAnalysisBody", "controlsHint", "welcomeScreen", "lapLabApp",
-        "driverMassInput", "carMassInput", "dragAreaInput", "physicsStatus", "modeledMass",
-        "systemKineticEnergy", "driverKineticEnergy", "averageDrag", "peakDrag", "peakDragPower",
+        "driverMassInput", "carMassInput", "dragAreaInput", "downforceAreaInput", "airDensityInput",
+        "physicsStatus", "modeledMass",
+        "systemKineticEnergy", "driverKineticEnergy", "averageDrag", "peakDrag", "averageDownforce",
+        "peakDownforce", "peakDragPower",
         "sampledAcceleration", "sampledInertialForce",
         "enterLabButton", "showIntroButton",
         "navHome", "navCars",
@@ -27,7 +32,7 @@
       let previousFrame = 0;
       let animationFrame = 0;
       let trackPoints = [];
-      const airDensity = 1.225;
+      const gravity = 9.80665;
 
       function setStatus(message, error = false) {
         els.statusLine.textContent = message;
@@ -166,6 +171,161 @@
         };
       }
 
+      function physicsInputs() {
+        return [
+          { element: els.driverMassInput, label: "driver and equipment mass", min: 35, max: 120 },
+          { element: els.carMassInput, label: "car mass", min: 500, max: 1000 },
+          { element: els.dragAreaInput, label: "drag area CdA", min: 0.3, max: 2.5 },
+          { element: els.downforceAreaInput, label: "downforce area ClA", min: 0, max: 8 },
+          { element: els.airDensityInput, label: "air density", min: 0.5, max: 2 }
+        ];
+      }
+
+      function readPhysicsModel() {
+        const invalid = physicsInputs().filter(({ element, min, max }) => {
+          const value = Number(element.value);
+          const isInvalid = !Number.isFinite(value) || value < min || value > max;
+          element.setAttribute("aria-invalid", String(isInvalid));
+          return isInvalid;
+        });
+        if (invalid.length) {
+          const message = `Enter valid values for ${invalid.map(input => input.label).join(", ")}.`;
+          els.physicsStatus.textContent = message;
+          return null;
+        }
+        return {
+          driverMassKg: Number(els.driverMassInput.value),
+          totalMassKg: Number(els.driverMassInput.value) + Number(els.carMassInput.value),
+          dragAreaM2: Number(els.dragAreaInput.value),
+          downforceAreaM2: Number(els.downforceAreaInput.value),
+          airDensityKgM3: Number(els.airDensityInput.value)
+        };
+      }
+
+      function sampleTimeSeconds(point, lap) {
+        return Number.isFinite(point.timeMs) ? point.timeMs / 1000 : point.t * lap.timeMs / 1000;
+      }
+
+      function accelerationAt(points, index, lap) {
+        if (points.length < 2) return null;
+        const leftIndex = Math.max(0, index - 1);
+        const rightIndex = Math.min(points.length - 1, index + 1);
+        const left = points[leftIndex];
+        const right = points[rightIndex];
+        const elapsed = sampleTimeSeconds(right, lap) - sampleTimeSeconds(left, lap);
+        if (!Number.isFinite(left.speed) || !Number.isFinite(right.speed) || elapsed <= 0) return null;
+        return ((right.speed - left.speed) / 3.6) / elapsed;
+      }
+
+      function calculateSamplePhysics(point, acceleration, model) {
+        if (!Number.isFinite(point.speed)) return null;
+        const speedMps = Math.max(0, point.speed) / 3.6;
+        const dragN = 0.5 * model.airDensityKgM3 * model.dragAreaM2 * speedMps ** 2;
+        const downforceN = 0.5 * model.airDensityKgM3 * model.downforceAreaM2 * speedMps ** 2;
+        return {
+          speedMps,
+          dragN,
+          downforceN,
+          dragPowerW: dragN * speedMps,
+          kineticEnergyJ: 0.5 * model.totalMassKg * speedMps ** 2,
+          driverEnergyJ: 0.5 * model.driverMassKg * speedMps ** 2,
+          accelerationMps2: acceleration,
+          accelerationG: Number.isFinite(acceleration) ? acceleration / gravity : null,
+          inertialForceN: Number.isFinite(acceleration) ? model.totalMassKg * acceleration : null
+        };
+      }
+
+      function nearestPointIndex(points, position) {
+        let low = 0;
+        let high = points.length - 1;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          if (points[middle].t < position) low = middle + 1;
+          else high = middle;
+        }
+        if (low > 0 && Math.abs(points[low - 1].t - position) <= Math.abs(points[low].t - position)) {
+          return low - 1;
+        }
+        return low;
+      }
+
+      function formatCell(value, digits = 2) {
+        return Number.isFinite(value) ? value.toFixed(digits) : "—";
+      }
+
+      function renderSampleTable(lapIndexToRender = Number(els.sampleLapSelect.value || 0)) {
+        if (!selectedData) return;
+        const lap = selectedData.laps[lapIndexToRender];
+        const model = readPhysicsModel();
+        els.sampleTelemetryBody.replaceChildren();
+        if (!lap || !model) return;
+
+        const fragment = document.createDocumentFragment();
+        lap.points.forEach((point, index) => {
+          const physics = calculateSamplePhysics(point, accelerationAt(lap.points, index, lap), model);
+          const values = [
+            String(index + 1),
+            formatCell(sampleTimeSeconds(point, lap), 3),
+            formatCell(point.speed, 1),
+            formatCell(point.throttle, 1),
+            point.brake == null ? "—" : point.brake ? "ON" : "OFF",
+            point.gear == null ? "—" : String(point.gear),
+            point.drs == null ? "—" : String(point.drs),
+            formatCell(physics?.accelerationMps2),
+            formatCell(physics?.accelerationG),
+            formatCell(physics?.dragN, 1),
+            formatCell(physics?.downforceN, 1),
+            formatCell(physics?.dragPowerW == null ? null : physics.dragPowerW / 1000, 2),
+            formatCell(physics?.kineticEnergyJ == null ? null : physics.kineticEnergyJ / 1000, 2),
+            formatCell(physics?.driverEnergyJ == null ? null : physics.driverEnergyJ / 1000, 2),
+            formatCell(physics?.inertialForceN, 1)
+          ];
+          const row = document.createElement("tr");
+          values.forEach(value => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.append(cell);
+          });
+          fragment.append(row);
+        });
+        els.sampleTelemetryBody.append(fragment);
+      }
+
+      function exportSampleTelemetry() {
+        if (!selectedData) return;
+        const model = readPhysicsModel();
+        if (!model) return;
+        const headers = [
+          "lap", "sample", "time_s", "speed_kmh", "throttle_pct", "brake", "gear", "drs",
+          "acceleration_m_s2", "acceleration_g", "drag_n", "downforce_n", "drag_power_kw",
+          "kinetic_energy_kj", "driver_kinetic_energy_kj", "mass_acceleration_force_n"
+        ];
+        const csv = [headers.join(",")];
+        selectedData.laps.forEach((lap, lapNumber) => {
+          lap.points.forEach((point, index) => {
+            const physics = calculateSamplePhysics(point, accelerationAt(lap.points, index, lap), model);
+            const row = [
+              lap.lapNumber ?? lapNumber + 1, index + 1, sampleTimeSeconds(point, lap),
+              point.speed ?? "", point.throttle ?? "", point.brake ?? "", point.gear ?? "",
+              point.drs ?? "", physics?.accelerationMps2 ?? "", physics?.accelerationG ?? "",
+              physics?.dragN ?? "", physics?.downforceN ?? "",
+              physics ? physics.dragPowerW / 1000 : "",
+              physics ? physics.kineticEnergyJ / 1000 : "",
+              physics ? physics.driverEnergyJ / 1000 : "",
+              physics?.inertialForceN ?? ""
+            ];
+            csv.push(row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(","));
+          });
+        });
+        const blob = new Blob([csv.join("\r\n")], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${selectedData.year}-${selectedData.driver}-telemetry-physics.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
       function updateMarker() {
         if (!selectedData) return;
         const lap = selectedData.laps[lapIndex];
@@ -176,12 +336,39 @@
         els.marker.setAttribute("cy", point.y);
         els.markerGlow.setAttribute("cx", point.x);
         els.markerGlow.setAttribute("cy", point.y);
-        const sample = lap.points.reduce((best, item) => Math.abs(item.t - progress) < Math.abs(best.t - progress) ? item : best, lap.points[0]);
+        const sampleIndex = nearestPointIndex(lap.points, progress);
+        const sample = lap.points[sampleIndex];
+        const interpolated = (() => {
+          const next = lap.points[Math.min(lap.points.length - 1, sampleIndex + (sample.t < progress ? 1 : 0))];
+          const previous = lap.points[Math.max(0, sampleIndex - (sample.t >= progress ? 1 : 0))];
+          const span = next.t - previous.t;
+          const fraction = span > 0 ? Math.max(0, Math.min(1, (progress - previous.t) / span)) : 0;
+          return Number.isFinite(previous.speed) && Number.isFinite(next.speed)
+            ? previous.speed + (next.speed - previous.speed) * fraction
+            : sample.speed;
+        })();
+        const model = readPhysicsModel();
+        const liveSample = { ...sample, speed: interpolated };
+        const samplePhysics = model
+          ? calculateSamplePhysics(liveSample, accelerationAt(lap.points, sampleIndex, lap), model)
+          : null;
         els.lapTimeValue.textContent = formatTime(progress * lap.timeMs);
-        els.speedValue.textContent = Math.round(sample.speed ?? 0);
+        els.speedValue.textContent = Number.isFinite(interpolated) ? interpolated.toFixed(1) : "—";
         els.throttleValue.textContent = Math.round(sample.throttle ?? 0);
         els.brakeValue.textContent = sample.brake == null ? "—" : (sample.brake ? "ON" : "OFF");
         els.gearValue.textContent = sample.gear == null ? "—" : String(sample.gear);
+        els.drsValue.textContent = sample.drs == null ? "—" : String(sample.drs);
+        els.sampleTimeValue.textContent = formatCell(progress * lap.timeMs / 1000, 3);
+        els.liveAcceleration.textContent = samplePhysics && Number.isFinite(samplePhysics.accelerationMps2)
+          ? `${samplePhysics.accelerationMps2.toFixed(2)} m/s² (${samplePhysics.accelerationG.toFixed(2)} g)`
+          : "Unavailable";
+        els.liveDrag.textContent = samplePhysics ? `${samplePhysics.dragN.toFixed(0)} N` : "Unavailable";
+        els.liveDownforce.textContent = samplePhysics ? `${samplePhysics.downforceN.toFixed(0)} N` : "Unavailable";
+        els.liveDragPower.textContent = samplePhysics ? `${(samplePhysics.dragPowerW / 1000).toFixed(1)} kW` : "Unavailable";
+        els.liveKineticEnergy.textContent = samplePhysics ? `${(samplePhysics.kineticEnergyJ / 1000).toFixed(1)} kJ` : "Unavailable";
+        els.liveInertialForce.textContent = samplePhysics && Number.isFinite(samplePhysics.inertialForceN)
+          ? `${samplePhysics.inertialForceN.toFixed(0)} N`
+          : "Unavailable";
         const percent = Math.floor(progress * 100);
         els.progressBar.style.width = `${percent}%`;
         els.progressMeter.setAttribute("aria-valuenow", String(percent));
@@ -410,36 +597,24 @@
       }
 
       function renderPhysicsAnalysis(data) {
-        const modelInputs = [
-          { element: els.driverMassInput, label: "Driver + equipment mass", min: 35, max: 120 },
-          { element: els.carMassInput, label: "Car mass", min: 500, max: 1000 },
-          { element: els.dragAreaInput, label: "Drag area", min: 0.3, max: 2.5 }
-        ];
-        const invalid = modelInputs.filter(({ element, min, max }) => {
-          const value = Number(element.value);
-          return !Number.isFinite(value) || value < min || value > max;
-        });
-        modelInputs.forEach(({ element, min, max }) => {
-          const value = Number(element.value);
-          element.setAttribute("aria-invalid", String(!Number.isFinite(value) || value < min || value > max));
-        });
-        if (invalid.length) {
-          els.physicsStatus.textContent = `Enter valid values for ${invalid.map(input => input.label).join(", ")}.`;
+        const model = readPhysicsModel();
+        if (!model) {
           for (const id of [
             "modeledMass", "systemKineticEnergy", "driverKineticEnergy", "averageDrag",
-            "peakDrag", "peakDragPower", "sampledAcceleration", "sampledInertialForce"
+            "peakDrag", "averageDownforce", "peakDownforce", "peakDragPower",
+            "sampledAcceleration", "sampledInertialForce"
           ]) els[id].textContent = "—";
           return;
         }
 
-        els.physicsStatus.textContent = "Using editable model inputs and standard air density (1.225 kg/m³).";
-        const driverMass = Number(els.driverMassInput.value);
-        const totalMass = driverMass + Number(els.carMassInput.value);
-        const dragArea = Number(els.dragAreaInput.value);
-        const lapSamples = data.laps.flatMap(lap =>
-          (lap.points || []).map(point => ({ point, lapTimeMs: lap.timeMs }))
-        );
-        const speedSamples = lapSamples
+        els.physicsStatus.textContent = `Live calculations use recorded samples and editable inputs; air density ${model.airDensityKgM3.toFixed(3)} kg/m³. Aero values are estimates, not car setup telemetry.`;
+        const samples = data.laps.flatMap(lap => (lap.points || []).map((point, index) => ({
+          lap,
+          point,
+          acceleration: accelerationAt(lap.points, index, lap)
+        })));
+        const validSamples = samples.filter(({ point }) => Number.isFinite(point.speed) && point.speed >= 0);
+        const speedSamples = validSamples
           .map(({ point }) => point.speed)
           .filter(speed => Number.isFinite(speed) && speed >= 0)
           .map(speed => speed / 3.6);
@@ -448,47 +623,190 @@
           els.physicsStatus.textContent = "No valid speed samples are available to calculate the physics estimates.";
           for (const id of [
             "modeledMass", "systemKineticEnergy", "driverKineticEnergy", "averageDrag",
-            "peakDrag", "peakDragPower", "sampledAcceleration", "sampledInertialForce"
+            "peakDrag", "averageDownforce", "peakDownforce", "peakDragPower",
+            "sampledAcceleration", "sampledInertialForce"
           ]) els[id].textContent = "Unavailable";
           return;
         }
 
         const peakSpeed = Math.max(...speedSamples);
-        const dragForces = speedSamples.map(speed => 0.5 * airDensity * dragArea * speed ** 2);
+        const calculated = validSamples.map(({ point, acceleration }) =>
+          calculateSamplePhysics(point, acceleration, model)
+        ).filter(Boolean);
+        const dragForces = calculated.map(sample => sample.dragN);
+        const downforceForces = calculated.map(sample => sample.downforceN);
         const averageForce = dragForces.reduce((sum, force) => sum + force, 0) / dragForces.length;
         const peakForce = Math.max(...dragForces);
-        const peakPower = Math.max(...dragForces.map((force, index) => force * speedSamples[index]));
-        let peakAcceleration = 0;
-        let peakDeceleration = 0;
-        let hasAcceleration = false;
-        for (const lap of data.laps) {
-          const points = lap.points || [];
-          for (let index = 1; index < points.length; index++) {
-            const previous = points[index - 1];
-            const current = points[index];
-            const elapsed = (current.t - previous.t) * lap.timeMs / 1000;
-            if (!Number.isFinite(previous.speed) || !Number.isFinite(current.speed) ||
-                !Number.isFinite(elapsed) || elapsed <= 0) continue;
-            const acceleration = (current.speed - previous.speed) / 3.6 / elapsed;
-            peakAcceleration = Math.max(peakAcceleration, acceleration);
-            peakDeceleration = Math.min(peakDeceleration, acceleration);
-            hasAcceleration = true;
-          }
-        }
+        const peakPower = Math.max(...calculated.map(sample => sample.dragPowerW));
+        const accelerationSamples = calculated.filter(sample => Number.isFinite(sample.accelerationMps2));
+        const acceleration = accelerationSamples.map(sample => sample.accelerationMps2);
+        const peakAcceleration = Math.max(0, ...acceleration);
+        const peakDeceleration = Math.min(0, ...acceleration);
 
-        els.modeledMass.textContent = `${totalMass.toFixed(1)} kg`;
-        els.systemKineticEnergy.textContent = `${(0.5 * totalMass * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
-        els.driverKineticEnergy.textContent = `${(0.5 * driverMass * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
+        els.modeledMass.textContent = `${model.totalMassKg.toFixed(1)} kg`;
+        els.systemKineticEnergy.textContent = `${(0.5 * model.totalMassKg * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
+        els.driverKineticEnergy.textContent = `${(0.5 * model.driverMassKg * peakSpeed ** 2 / 1000).toFixed(1)} kJ`;
         els.averageDrag.textContent = `${Math.round(averageForce)} N`;
         els.peakDrag.textContent = `${Math.round(peakForce)} N`;
+        els.averageDownforce.textContent = `${Math.round(downforceForces.reduce((sum, force) => sum + force, 0) / downforceForces.length)} N`;
+        els.peakDownforce.textContent = `${Math.round(Math.max(...downforceForces))} N`;
         els.peakDragPower.textContent = `${(peakPower / 1000).toFixed(1)} kW`;
-        els.sampledAcceleration.textContent = hasAcceleration
-          ? `+${(peakAcceleration / 9.80665).toFixed(2)} / ${(peakDeceleration / 9.80665).toFixed(2)} g`
+        els.sampledAcceleration.textContent = accelerationSamples.length
+          ? `+${(peakAcceleration / gravity).toFixed(2)} / ${(peakDeceleration / gravity).toFixed(2)} g`
           : "Unavailable";
-        els.sampledInertialForce.textContent = hasAcceleration
-          ? `${Math.round(totalMass * Math.max(peakAcceleration, Math.abs(peakDeceleration)))} N`
+        els.sampledInertialForce.textContent = accelerationSamples.length
+          ? `${Math.round(model.totalMassKg * Math.max(peakAcceleration, Math.abs(peakDeceleration)))} N`
           : "Unavailable";
       }
+
+      function readDigitalTwinModel() {
+        const getNumber = (id, fallback) => {
+          const value = Number(document.getElementById(id)?.value);
+          return Number.isFinite(value) ? value : fallback;
+        };
+
+        const model = {
+          massKg: getNumber("dtMassInput", 750),
+          driverMassKg: getNumber("dtDriverMassInput", 80),
+          powerKw: getNumber("dtPowerKwInput", 740),
+          maxSpeedKmh: getNumber("dtMaxSpeedInput", 350),
+          currentSpeedKmh: getNumber("dtCurrentSpeedInput", 280),
+          gearRatio: getNumber("dtGearRatioInput", 3.2),
+          wheelRadiusM: getNumber("dtWheelRadiusInput", 0.34),
+          efficiency: Math.min(1, Math.max(0.01, getNumber("dtEfficiencyInput", 0.88))),
+          trackKm: getNumber("dtTrackKmInput", 5.8),
+          cornerCount: getNumber("dtCornerCountInput", 18),
+          cornerRadiusM: getNumber("dtCornerRadiusInput", 55),
+          straightLengthM: getNumber("dtStraightLengthInput", 250),
+          gradientPercent: getNumber("dtGradientInput", 1.2),
+          raceLaps: Math.max(1, Math.round(getNumber("dtRaceLapsInput", 20))),
+          airDensity: Math.max(0.1, getNumber("dtAirDensityInput", 1.225)),
+          dragCoefficient: getNumber("dtDragCoefficientInput", 0.9),
+          frontalArea: getNumber("dtFrontalAreaInput", 1.8),
+          downforceCoefficient: getNumber("dtDownforceCoefficientInput", 3.4),
+          aeroArea: getNumber("dtAeroAreaInput", 2.4),
+          headwind: getNumber("dtHeadwindInput", 2.5),
+          grip: getNumber("dtGripInput", 1.8),
+          tyreWearPercent: Math.min(100, Math.max(0, getNumber("dtTyreWearInput", 20))),
+          tyreTemperatureC: getNumber("dtTyreTemperatureInput", 85),
+          tyrePressurePsi: getNumber("dtTyrePressureInput", 28),
+          brakingDeceleration: getNumber("dtBrakingDecelerationInput", 18),
+          brakeTemperatureC: getNumber("dtBrakeTemperatureInput", 650),
+          suspensionStiffness: getNumber("dtSuspensionStiffnessInput", 320000),
+          suspensionDamping: getNumber("dtSuspensionDampingInput", 18000),
+          fuelKg: getNumber("dtFuelKgInput", 110),
+          fuelPerLapKg: getNumber("dtFuelPerLapInput", 1.85),
+          fuelEnergyMjKg: getNumber("dtFuelEnergyInput", 42.8),
+          engineRpm: getNumber("dtEngineRpmInput", 15000),
+          engineEfficiency: Math.min(1, Math.max(0.01, getNumber("dtEngineEfficiencyInput", 0.36))),
+          batteryKwh: getNumber("dtBatteryKwhInput", 5),
+          motorPowerKw: getNumber("dtMotorPowerInput", 160),
+          batteryUsePerLapKwh: getNumber("dtBatteryUseInput", 0.7),
+          ambientTempC: getNumber("dtAmbientTempInput", 25),
+          altitudeM: getNumber("dtAltitudeInput", 60),
+          windFactor: Math.min(1, Math.max(0, getNumber("dtWindFactorInput", 0.75)))
+        };
+
+        model.totalMassKg = model.massKg + model.driverMassKg;
+        model.speedMps = model.currentSpeedKmh / 3.6;
+        model.maxSpeedMps = model.maxSpeedKmh / 3.6;
+        model.trackLengthM = model.trackKm * 1000;
+        model.gradientAngle = Math.atan(model.gradientPercent / 100);
+        model.airSpeedMps = Math.max(0, model.speedMps + model.headwind * model.windFactor);
+        model.dragForceN = 0.5 * model.airDensity * model.dragCoefficient * model.frontalArea * model.airSpeedMps ** 2;
+        model.downforceN = 0.5 * model.airDensity * model.downforceCoefficient * model.aeroArea * model.speedMps ** 2;
+        model.normalForceN = model.totalMassKg * gravity + model.downforceN;
+        model.effectiveGrip = model.grip * (1 - model.tyreWearPercent / 100);
+        model.cornerAccelerationMps2 = model.effectiveGrip * model.normalForceN / model.totalMassKg;
+        model.cornerSpeedMps = Math.sqrt(Math.max(0, model.cornerAccelerationMps2 * model.cornerRadiusM));
+        model.cornerSpeedKmh = model.cornerSpeedMps * 3.6;
+        model.wheelPowerW = model.powerKw * 1000 * model.efficiency;
+        model.engineForceN = model.speedMps > 0 ? model.wheelPowerW / model.speedMps : 0;
+        model.engineTorqueNm = model.engineRpm > 0 ? model.powerKw * 1000 / (2 * Math.PI * model.engineRpm / 60) : 0;
+        model.wheelTorqueNm = model.engineTorqueNm * model.gearRatio * model.efficiency;
+        model.wheelForceN = model.wheelRadiusM > 0 ? model.wheelTorqueNm / model.wheelRadiusM : 0;
+        model.netForceN = model.engineForceN - model.dragForceN;
+        model.accelerationMps2 = model.netForceN / model.totalMassKg;
+        model.gradientForceN = model.totalMassKg * gravity * Math.sin(model.gradientAngle);
+        model.slopeAccelerationMps2 = (model.netForceN - model.gradientForceN) / model.totalMassKg;
+        model.brakingDistanceM = model.speedMps ** 2 / (2 * model.brakingDeceleration);
+        model.brakingTimeS = model.speedMps / model.brakingDeceleration;
+        model.maxAirSpeedMps = model.maxSpeedMps + model.headwind * model.windFactor;
+        model.maxDragN = 0.5 * model.airDensity * model.dragCoefficient * model.frontalArea * model.maxAirSpeedMps ** 2;
+        model.averageSpeedMps = (model.maxSpeedMps + model.cornerSpeedMps) / 2;
+        model.averageSpeedMps = Math.max(1, Math.min(model.maxSpeedMps, model.averageSpeedMps));
+        model.lapTimeS = model.trackLengthM / model.averageSpeedMps;
+        model.raceTimeS = model.lapTimeS * model.raceLaps;
+        model.fuelRequiredKg = model.fuelPerLapKg * model.raceLaps;
+        model.fuelRemainingKg = model.fuelKg - model.fuelRequiredKg;
+        model.possibleLaps = Math.floor(model.fuelKg / model.fuelPerLapKg);
+        model.fuelEnergyMj = model.fuelKg * model.fuelEnergyMjKg;
+        model.usefulEngineEnergyMj = model.fuelEnergyMj * model.engineEfficiency;
+        model.batteryRequiredKwh = model.batteryUsePerLapKwh * model.raceLaps;
+        model.batteryRemainingKwh = model.batteryKwh - model.batteryRequiredKwh;
+        model.naturalFrequencyHz = Math.sqrt(model.suspensionStiffness / model.totalMassKg) / (2 * Math.PI);
+        model.dampingRatio = model.suspensionDamping / (2 * Math.sqrt(model.suspensionStiffness * model.totalMassKg));
+        model.raceDistanceKm = model.trackKm * model.raceLaps;
+        model.cornerDensity = model.cornerCount / model.trackKm;
+        model.straightTimeS = model.straightLengthM / model.averageSpeedMps;
+        return model;
+      }
+
+      function updateDigitalTwin() {
+        const model = readDigitalTwinModel();
+        const resultMap = {
+          dtMassResult: `${model.totalMassKg.toFixed(1)} kg`,
+          dtWheelPowerResult: `${(model.wheelPowerW / 1000).toFixed(1)} kW`,
+          dtEngineForceResult: `${model.engineForceN.toFixed(0)} N`,
+          dtDragResult: `${model.dragForceN.toFixed(0)} N`,
+          dtDownforceResult: `${model.downforceN.toFixed(0)} N`,
+          dtCornerSpeedResult: `${model.cornerSpeedKmh.toFixed(1)} km/h`,
+          dtBrakingDistanceResult: `${model.brakingDistanceM.toFixed(1)} m`,
+          dtLapTimeResult: `${model.lapTimeS.toFixed(2)} s`,
+          dtFuelRemainingResult: `${model.fuelRemainingKg.toFixed(2)} kg`,
+          dtBatteryRemainingResult: `${model.batteryRemainingKwh.toFixed(2)} kWh`,
+          dtRaceTimeResult: `${model.raceTimeS.toFixed(1)} s`,
+          dtCornerDensityResult: `${model.cornerDensity.toFixed(2)} corners/km`
+        };
+
+        Object.entries(resultMap).forEach(([id, value]) => {
+          const element = document.getElementById(id);
+          if (element) element.textContent = value;
+        });
+
+        const statusParts = [];
+        if (model.fuelRemainingKg >= 0) statusParts.push("Fuel sufficient");
+        else statusParts.push("Fuel shortfall");
+        if (model.batteryRemainingKwh >= 0) statusParts.push("battery sufficient");
+        else statusParts.push("battery shortfall");
+        if (model.currentSpeedKmh <= model.maxSpeedKmh) statusParts.push("speed within limit");
+        else statusParts.push("speed over limit");
+
+        const status = statusParts.join(" · ");
+        const statusElement = document.getElementById("digitalTwinStatus");
+        if (statusElement) {
+          statusElement.textContent = `${status}. Estimated lap time ${model.lapTimeS.toFixed(2)} s, peak corner speed ${model.cornerSpeedKmh.toFixed(1)} km/h, and max drag ${model.maxDragN.toFixed(0)} N.`;
+        }
+      }
+
+      const digitalTwinFields = [
+        "dtMassInput", "dtDriverMassInput", "dtPowerKwInput", "dtMaxSpeedInput", "dtCurrentSpeedInput",
+        "dtGearRatioInput", "dtWheelRadiusInput", "dtEfficiencyInput", "dtTrackKmInput", "dtCornerCountInput",
+        "dtCornerRadiusInput", "dtStraightLengthInput", "dtGradientInput", "dtRaceLapsInput", "dtAirDensityInput",
+        "dtDragCoefficientInput", "dtFrontalAreaInput", "dtDownforceCoefficientInput", "dtAeroAreaInput",
+        "dtHeadwindInput", "dtGripInput", "dtTyreWearInput", "dtTyreTemperatureInput", "dtTyrePressureInput",
+        "dtBrakingDecelerationInput", "dtBrakeTemperatureInput", "dtSuspensionStiffnessInput", "dtSuspensionDampingInput",
+        "dtFuelKgInput", "dtFuelPerLapInput", "dtFuelEnergyInput", "dtEngineRpmInput", "dtEngineEfficiencyInput",
+        "dtBatteryKwhInput", "dtMotorPowerInput", "dtBatteryUseInput", "dtAmbientTempInput", "dtAltitudeInput",
+        "dtWindFactorInput"
+      ];
+
+      digitalTwinFields.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.addEventListener("input", updateDigitalTwin);
+      });
+
+      updateDigitalTwin();
 
       function renderSectorAnalysis(data) {
         els.sectorAnalysisBody.replaceChildren();
@@ -541,6 +859,8 @@
         if (lapIndex + 1 < selectedData.laps.length) {
           lapIndex += 1;
           progress = 0;
+          els.sampleLapSelect.value = String(lapIndex);
+          renderSampleTable(lapIndex);
           updateMarker();
           running = true;
           previousFrame = 0;
@@ -584,6 +904,12 @@
           selectedData = data;
           lapIndex = 0;
           progress = 0;
+          els.sampleLapSelect.replaceChildren(...data.laps.map((lap, index) =>
+            new Option(`Lap ${lap.lapNumber ?? index + 1}`, String(index))
+          ));
+          els.sampleLapSelect.value = "0";
+          els.sampleTelemetrySummary.textContent = `${data.laps.length} selected lap${data.laps.length === 1 ? "" : "s"} · ${data.laps[0].points.length.toLocaleString()} returned samples shown per lap`;
+          els.sampleTelemetryPanel.hidden = false;
           drawTrack(data);
           els.trackTitle.textContent = data.event;
           els.trackSubtitle.textContent = `${data.location} · ${data.year} · ${data.session} · ${data.driverName} (${data.driver}) · Fastest recorded lap ${formatTime(data.laps[0].timeMs)}`;
@@ -594,6 +920,8 @@
           els.startButton.disabled = false;
           els.startButton.textContent = "Start replay";
           els.pauseButton.disabled = true;
+          renderSampleTable(0);
+          renderPhysicsAnalysis(data);
           updateMarker();
           setStatus(`${data.laps.length} real lap${data.laps.length === 1 ? "" : "s"} loaded from FastF1 (${data.session}). Press Start replay to view them.`);
         } catch (error) {
@@ -629,6 +957,7 @@
         els.startButton.disabled = true;
         els.pauseButton.disabled = true;
         els.resultsPanel.hidden = true;
+        els.sampleTelemetryPanel.hidden = true;
         setSvgVisible(els.trackEmpty, true);
         els.trackOverview.hidden = true;
         for (const id of ["trackOutline", "trackCore", "trackBlue", "trackCenter", "trackHighlight", "marker", "markerGlow"]) {
@@ -643,6 +972,14 @@
         els.throttleValue.textContent = "—";
         els.brakeValue.textContent = "—";
         els.gearValue.textContent = "—";
+        els.drsValue.textContent = "—";
+        els.sampleTimeValue.textContent = "—";
+        els.liveAcceleration.textContent = "—";
+        els.liveDrag.textContent = "—";
+        els.liveDownforce.textContent = "—";
+        els.liveDragPower.textContent = "—";
+        els.liveKineticEnergy.textContent = "—";
+        els.liveInertialForce.textContent = "—";
         els.progressBar.style.width = "0%";
         els.progressMeter.setAttribute("aria-valuenow", "0");
         await loadDrivers();
@@ -660,14 +997,20 @@
         els.startButton.disabled = true;
         els.pauseButton.disabled = true;
         els.resultsPanel.hidden = true;
+        els.sampleTelemetryPanel.hidden = true;
         els.loadButton.disabled = false;
       });
       els.loadButton.addEventListener("click", loadLapData);
-      [els.driverMassInput, els.carMassInput, els.dragAreaInput].forEach(input =>
+      [els.driverMassInput, els.carMassInput, els.dragAreaInput, els.downforceAreaInput, els.airDensityInput].forEach(input =>
         input.addEventListener("input", () => {
-          if (selectedData && !els.resultsPanel.hidden) renderPhysicsAnalysis(selectedData);
+          if (!selectedData) return;
+          renderPhysicsAnalysis(selectedData);
+          renderSampleTable();
+          updateMarker();
         })
       );
+      els.sampleLapSelect.addEventListener("change", () => renderSampleTable());
+      els.exportTelemetryButton.addEventListener("click", exportSampleTelemetry);
       els.enterLabButton.addEventListener("click", enterLapLab);
       els.showIntroButton.addEventListener("click", showIntro);
       els.startRacingButton.addEventListener("click", enterLapLab);

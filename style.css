@@ -70,6 +70,23 @@
     .metric:nth-child(odd) { border-right: 0; }
     .metric-value { margin-top: 7px; font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; }
     .metric-unit { color: #9aa6b5; font-size: 9px; font-weight: 450; }
+    .live-physics { grid-column: 1/-1; padding: 13px; border-bottom: 1px solid var(--line); }
+    .live-physics-heading { margin-bottom: 9px; color: #ff6975; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .live-physics-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+    .live-physics-grid > div { min-width: 0; padding: 8px; border: 1px solid rgba(169,187,211,.1); border-radius: 6px; }
+    .live-physics-grid span, .live-physics-grid b { display: block; }
+    .live-physics-grid span { color: var(--muted); font-size: 7px; letter-spacing: .08em; text-transform: uppercase; }
+    .live-physics-grid b { margin-top: 4px; font-size: 12px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .live-physics-inputs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; margin-top: 10px; }
+    .live-physics-inputs label { min-width: 0; color: var(--muted); font-size: 7px; line-height: 1.4; }
+    .live-physics-inputs input {
+      display: block; width: 100%; min-height: 30px; margin-top: 3px; padding: 0 6px;
+      border: 1px solid rgba(169,187,211,.17); border-radius: 5px;
+      background: #10090a; color: #f5e9eb; font: inherit; font-size: 9px;
+    }
+    .live-physics-inputs input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+    .live-physics-inputs input[aria-invalid="true"] { border-color: #ff6975; }
+    .live-physics .physics-status { min-height: 0; margin: 8px 0 0; color: #a9b4c4; font-size: 8px; }
     .track-legend { grid-column: 1/-1; padding: 11px 14px; color: var(--muted); font-size: 9px; line-height: 1.5; }
     .legend-line { display: inline-block; width: 25px; height: 3px; margin-right: 6px; border-radius: 3px; background: linear-gradient(90deg,#ff8990,#ff2438,#b90e21); vertical-align: middle; }
     .welcome { position: relative; z-index: 10; min-height: 100vh; overflow: hidden; padding: 0; background: #080607; }
@@ -83,12 +100,12 @@
     .landing-links button:hover, .landing-links button.active { border-bottom-color: #ff2438; color: #ff4352; }
     .landing-start { min-height: 36px; padding: 0 16px; border: 0; border-radius: 6px; background: #e51a2d; color: #fff5f5; font-size: 9px; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
     .landing-hero { position: relative; height: clamp(345px,48vw,430px); overflow: hidden; background: linear-gradient(100deg,#080607 0%,rgba(18,7,9,.86) 37%,rgba(25,8,11,.2) 100%); }
-    .hero-photo-stage { position: absolute; inset: 0 0 0 auto; width: 84%; overflow: hidden; background: #10090a; container-type: size; }
+    .hero-photo-stage { position: absolute; inset: 0 0 0 auto; width: 84%; overflow: hidden; background: #10090a; }
     .hero-photo-stage::before,
     .hero-photo-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; }
     .hero-photo-stage::before { z-index: 1; background: radial-gradient(circle at 28% 44%, rgba(255, 35, 56, .18), transparent 28%), rgba(9, 7, 8, .12); }
     .hero-photo-stage::after { z-index: 2; background: linear-gradient(90deg,#080607 0%,rgba(8,6,7,.68) 15%,rgba(8,6,7,.08) 57%,rgba(8,6,7,.2) 100%),linear-gradient(0deg,rgba(8,6,7,.45),transparent 35%); }
-    .hero-car-video { position: absolute; top: 50%; left: 50%; width: max(100cqw, 177.78cqh); height: max(100cqh, 56.25cqw); border: 0; z-index: 0; transform: translate(-50%,-50%); }
+    .hero-car-image { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 58%; filter: brightness(1.18) saturate(1.08); }
     .hero-photo-credit { position: absolute; z-index: 3; right: 12px; bottom: 8px; color: rgba(241,247,252,.78); font-size: 8px; text-shadow: 0 1px 4px #000; }
     .hero-photo-credit a { color: inherit; text-decoration: underline; }
     .landing-hero-copy { position: absolute; z-index: 2; top: 50%; left: clamp(22px,6vw,88px); width: min(460px,42vw); transform: translateY(-50%); pointer-events: none; }
@@ -171,15 +188,13 @@
     .telemetry-panel h3 { margin: 0 0 10px; font-size: 10px; }
     .telemetry-panel .grade-table-wrap { margin-bottom: 0; }
     .physics-intro { margin: -2px 0 12px; }
-    .physics-inputs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
-    .physics-inputs input {
-      width: 100%; min-height: 38px; padding: 0 10px; border: 1px solid rgba(169,187,211,.17);
-      border-radius: 7px; background: #10090a; color: #f5e9eb; font: inherit; font-size: 10px;
-    }
-    .physics-inputs input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
-    .physics-inputs input[aria-invalid="true"] { border-color: #ff6975; }
-    .physics-status { min-height: 14px; margin: 9px 0 0; color: #a9b4c4; font-size: 9px; }
     .physics-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin-top: 8px; }
+    .sample-actions { display: flex; align-items: end; gap: 10px; }
+    .sample-actions select { min-width: 130px; }
+    .export-button { min-width: 100px !important; }
+    .sample-table-wrap { max-height: 60vh; overflow: auto; }
+    .sample-table { min-width: 1080px; }
+    .sample-table th, .sample-table td { font-variant-numeric: tabular-nums; }
     .note { margin-top: 10px; color: #778294; font-size: 9px; line-height: 1.5; }
     footer { display: flex; justify-content: space-between; gap: 15px; margin-top: 14px; color: #697587; font-size: 9px; line-height: 1.5; }
     [hidden] { display: none !important; }
@@ -194,7 +209,7 @@
       .landing-hero { height: 430px; }
       .landing-hero-copy { top: 35px; left: 18px; width: min(300px,82vw); transform: none; }
       .landing-hero-copy h1 { font-size: 47px; }
-      .hero-photo-stage { width: 100%; opacity: .72; }
+      .hero-photo-stage { width: 100%; opacity: .85; }
       .landing-stats { min-height: 70px; padding: 10px 8px; gap: 2px; }
       .landing-stat { gap: 5px; }
       .landing-stat-icon { font-size: 17px; }
@@ -218,8 +233,10 @@
       .pace-set { min-width: 0; }
       .action-button { width: 100%; }
       .results-content { grid-template-columns: 1fr; }
-      .physics-inputs { grid-template-columns: 1fr; }
+      .live-physics-inputs { grid-template-columns: repeat(2,minmax(0,1fr)); }
       .physics-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
+      .sample-actions { align-items: stretch; flex-direction: column; }
+      .sample-actions select, .sample-actions .action-button { width: 100%; }
       .grade-table th, .grade-table td { padding-right: 8px; padding-left: 8px; }
       footer { flex-direction: column; }
     }
@@ -272,3 +289,64 @@
     .landing-stat-icon { color: #ff3448; }
     .landing-feature { border-color: rgba(255,55,70,.2); }
     button:focus-visible, select:focus-visible { outline-color: #ff4352; }
+    .digital-twin-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(260px, .9fr);
+      gap: 18px;
+      padding: 18px 18px 20px;
+    }
+    .digital-twin-form {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid rgba(255,55,70,.18);
+      border-radius: 12px;
+      background: rgba(12,8,9,.76);
+    }
+    .digital-twin-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(160px, 1fr));
+      gap: 10px;
+    }
+    .digital-twin-grid .field {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .digital-twin-grid input {
+      width: 100%;
+      min-height: 32px;
+      padding: 0 8px;
+      border: 1px solid rgba(169,187,211,.18);
+      border-radius: 6px;
+      background: rgba(15,10,11,.9);
+      color: #f4f7fb;
+      font: inherit;
+    }
+    .digital-twin-results {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid rgba(255,55,70,.18);
+      border-radius: 12px;
+      background: rgba(12,8,9,.76);
+    }
+    .twin-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(120px, 1fr));
+      gap: 10px;
+    }
+    .digital-twin-status {
+      padding: 10px 12px;
+      border: 1px solid rgba(255,55,70,.14);
+      border-radius: 8px;
+      background: rgba(255,36,56,.06);
+      color: #dfe5ed;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    @media (max-width: 860px) {
+      .digital-twin-layout { grid-template-columns: 1fr; }
+      .digital-twin-grid { grid-template-columns: 1fr; }
+    }

@@ -21,8 +21,8 @@
     </nav>
     <section class="landing-hero" aria-label="Racing simulator introduction">
       <div class="hero-photo-stage">
-        <iframe id="heroVideo" class="hero-car-video" src="https://www.youtube.com/embed/E2xEL_v-tAg?autoplay=1&amp;mute=1&amp;controls=1&amp;loop=1&amp;playlist=E2xEL_v-tAg&amp;playsinline=1" title="Mercedes-AMG ONE driving on track" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
-        <div class="hero-photo-credit">Driving footage: <a href="https://www.youtube.com/watch?v=E2xEL_v-tAg" target="_blank" rel="noopener">AutoMotoTV on YouTube</a></div>
+        <img class="hero-car-image" src="amg-one-hero.jpg" alt="Mercedes-AMG ONE on a race circuit" fetchpriority="high">
+        <div class="hero-photo-credit">Photo: <a href="https://www.youtube.com/watch?v=E2xEL_v-tAg" target="_blank" rel="noopener">AutoMotoTV on YouTube</a></div>
       </div>
       <div class="welcome-copy landing-hero-copy">
         <div class="welcome-kicker">Next-gen racing simulator</div>
@@ -123,6 +123,27 @@
           <div class="metric"><div class="metric-label">Throttle</div><div class="metric-value"><span id="throttleValue">—</span><span class="metric-unit">%</span></div></div>
           <div class="metric"><div class="metric-label">Brake</div><div class="metric-value"><span id="brakeValue">—</span></div></div>
           <div class="metric"><div class="metric-label">Gear</div><div class="metric-value"><span id="gearValue">—</span></div></div>
+          <div class="metric"><div class="metric-label">DRS</div><div class="metric-value"><span id="drsValue">—</span></div></div>
+          <div class="metric"><div class="metric-label">Sample time</div><div class="metric-value"><span id="sampleTimeValue">—</span><span class="metric-unit"> s</span></div></div>
+          <div class="live-physics">
+            <div class="live-physics-heading">Live physics · current replay point</div>
+            <div class="live-physics-grid">
+              <div><span>Acceleration</span><b id="liveAcceleration">—</b></div>
+              <div><span>Estimated drag</span><b id="liveDrag">—</b></div>
+              <div><span>Estimated downforce</span><b id="liveDownforce">—</b></div>
+              <div><span>Drag power</span><b id="liveDragPower">—</b></div>
+              <div><span>Kinetic energy</span><b id="liveKineticEnergy">—</b></div>
+              <div><span>Mass × acceleration</span><b id="liveInertialForce">—</b></div>
+            </div>
+            <div class="live-physics-inputs">
+              <label>Driver + equipment kg<input id="driverMassInput" type="number" min="35" max="120" step="0.5" value="80" inputmode="decimal"></label>
+              <label>Car mass kg<input id="carMassInput" type="number" min="500" max="1000" step="1" value="700" inputmode="decimal"></label>
+              <label>Drag area CdA m²<input id="dragAreaInput" type="number" min="0.3" max="2.5" step="0.01" value="1.00" inputmode="decimal"></label>
+              <label>Downforce area ClA m²<input id="downforceAreaInput" type="number" min="0" max="8" step="0.01" value="3.00" inputmode="decimal"></label>
+              <label>Air density kg/m³<input id="airDensityInput" type="number" min="0.5" max="2" step="0.001" value="1.225" inputmode="decimal"></label>
+            </div>
+            <p class="physics-status" id="physicsStatus" role="status" aria-live="polite">Edit assumptions to update the live model.</p>
+          </div>
           <div class="track-legend"><span class="legend-line"></span>The glowing marker follows FastF1 GPS samples. Turn numbers are from FastF1 circuit data when available.</div>
         </aside>
       </div>
@@ -170,6 +191,23 @@
       </div>
     </section>
 
+    <section class="panel sample-telemetry-panel" id="sampleTelemetryPanel" aria-label="Every returned telemetry sample" hidden>
+      <div class="results-heading">
+        <div><h2>Complete lap telemetry &amp; physics</h2><p id="sampleTelemetrySummary">Every returned FastF1 sample with modeled values</p></div>
+        <div class="sample-actions">
+          <label class="field"><span class="field-label">Lap detail</span><select id="sampleLapSelect"></select></label>
+          <button type="button" class="action-button secondary export-button" id="exportTelemetryButton">Export CSV</button>
+        </div>
+      </div>
+      <p class="note">Speed, throttle, brake, gear and DRS are returned FastF1 samples. Physics columns are calculated for each sample using the editable assumptions above. FastF1 telemetry is sampled and this response is capped at 1,200 points per lap; it is not the car's private raw ECU stream.</p>
+      <div class="grade-table-wrap sample-table-wrap">
+        <table class="grade-table sample-table">
+          <thead><tr><th>#</th><th>Time (s)</th><th>Speed (km/h)</th><th>Throttle (%)</th><th>Brake</th><th>Gear</th><th>DRS</th><th>Accel (m/s²)</th><th>Accel (g)</th><th>Drag (N)</th><th>Downforce (N)</th><th>Drag power (kW)</th><th>Total kinetic energy (kJ)</th><th>Driver energy (kJ)</th><th>m·a (N)</th></tr></thead>
+          <tbody id="sampleTelemetryBody"></tbody>
+        </table>
+      </div>
+    </section>
+
     <section class="panel results" id="resultsPanel" aria-label="Analysis of loaded real laps" aria-live="polite" hidden>
       <div class="results-heading">
         <div><h2>Session analysis</h2><p id="resultsSubheading">Fastest laps from the selected driver</p></div>
@@ -213,33 +251,92 @@
       </div>
       <div class="telemetry-panel physics-panel">
         <h3>Vehicle physics estimate</h3>
-        <p class="note physics-intro">Change the assumed masses and drag area to see how the selected lap speeds translate into estimated forces and energy. These are editable model inputs, not official driver or car specifications.</p>
-        <div class="physics-inputs">
-          <label class="field">
-            <span class="field-label">Driver + equipment mass (kg)</span>
-            <input id="driverMassInput" type="number" min="35" max="120" step="0.5" value="80" inputmode="decimal">
-          </label>
-          <label class="field">
-            <span class="field-label">Car mass, excluding driver (kg)</span>
-            <input id="carMassInput" type="number" min="500" max="1000" step="1" value="700" inputmode="decimal">
-          </label>
-          <label class="field">
-            <span class="field-label">Drag area CdA (m²)</span>
-            <input id="dragAreaInput" type="number" min="0.3" max="2.5" step="0.01" value="1.00" inputmode="decimal">
-          </label>
-        </div>
-        <p class="physics-status" id="physicsStatus" role="status" aria-live="polite"></p>
+        <p class="note physics-intro">Live sample-by-sample aerodynamic and vehicle estimates are shown beside the track during replay and in the complete telemetry table above.</p>
         <div class="physics-stats">
           <div class="analysis-stat"><span>Modeled total mass</span><b id="modeledMass">—</b></div>
           <div class="analysis-stat"><span>System kinetic energy at peak speed</span><b id="systemKineticEnergy">—</b></div>
           <div class="analysis-stat"><span>Driver-mass energy at peak speed</span><b id="driverKineticEnergy">—</b></div>
           <div class="analysis-stat"><span>Average estimated aero drag</span><b id="averageDrag">—</b></div>
           <div class="analysis-stat"><span>Peak estimated aero drag</span><b id="peakDrag">—</b></div>
+          <div class="analysis-stat"><span>Average estimated downforce</span><b id="averageDownforce">—</b></div>
+          <div class="analysis-stat"><span>Peak estimated downforce</span><b id="peakDownforce">—</b></div>
           <div class="analysis-stat"><span>Peak estimated drag power</span><b id="peakDragPower">—</b></div>
           <div class="analysis-stat"><span>Sampled longitudinal acceleration</span><b id="sampledAcceleration">—</b></div>
           <div class="analysis-stat"><span>Mass × sampled acceleration</span><b id="sampledInertialForce">—</b></div>
         </div>
-        <p class="note">Model: drag = ½ × air density (1.225 kg/m³) × CdA × speed²; drag power = drag × speed. The sampled inertial force is modeled mass × estimated acceleration; it is not engine output. Mass affects kinetic energy and this inertial-force estimate, not the drag formula. Acceleration is a rough estimate from adjacent sampled speed values. Wind, downforce/ride-height maps, tire effects, road grade, fuel load, actual driver mass and actual car setup are not supplied by this dataset.</p>
+        <p class="note">Model per sample: drag = ½ρ(CdA)v²; downforce = ½ρ(ClA)v²; drag power = drag × v; kinetic energy = ½mv²; longitudinal acceleration = Δv/Δt; inertial force = ma. CdA, ClA, masses and air density are editable assumptions, not telemetry. Wind, DRS-dependent aero maps, ride height, tire load, road grade and fuel load are unavailable, so treat aero figures as estimates—not engine power or official car data.</p>
+      </div>
+    </section>
+
+    <section class="panel digital-twin-panel" id="digitalTwinPanel" aria-label="Digital twin race car calculator">
+      <div class="results-heading">
+        <div>
+          <h2>Digital twin · MDP</h2>
+          <p>Estimate power, aero load, grip, lap time and energy use from editable inputs.</p>
+        </div>
+        <span class="session-badge">Track physics</span>
+      </div>
+      <div class="digital-twin-layout">
+        <div class="digital-twin-form">
+          <div class="digital-twin-grid">
+            <label class="field"><span class="field-label">Total car mass (kg)</span><input id="dtMassInput" type="number" step="0.1" value="750" /></label>
+            <label class="field"><span class="field-label">Driver mass (kg)</span><input id="dtDriverMassInput" type="number" step="0.1" value="80" /></label>
+            <label class="field"><span class="field-label">Engine power (kW)</span><input id="dtPowerKwInput" type="number" step="1" value="740" /></label>
+            <label class="field"><span class="field-label">Max speed (km/h)</span><input id="dtMaxSpeedInput" type="number" step="1" value="350" /></label>
+            <label class="field"><span class="field-label">Current speed (km/h)</span><input id="dtCurrentSpeedInput" type="number" step="1" value="280" /></label>
+            <label class="field"><span class="field-label">Overall gear ratio</span><input id="dtGearRatioInput" type="number" step="0.01" value="3.2" /></label>
+            <label class="field"><span class="field-label">Wheel radius (m)</span><input id="dtWheelRadiusInput" type="number" step="0.01" value="0.34" /></label>
+            <label class="field"><span class="field-label">Drivetrain efficiency</span><input id="dtEfficiencyInput" type="number" step="0.01" min="0.01" max="1" value="0.88" /></label>
+            <label class="field"><span class="field-label">Track length (km)</span><input id="dtTrackKmInput" type="number" step="0.1" value="5.8" /></label>
+            <label class="field"><span class="field-label">Corner count</span><input id="dtCornerCountInput" type="number" step="1" value="18" /></label>
+            <label class="field"><span class="field-label">Avg corner radius (m)</span><input id="dtCornerRadiusInput" type="number" step="1" value="55" /></label>
+            <label class="field"><span class="field-label">Avg straight length (m)</span><input id="dtStraightLengthInput" type="number" step="1" value="250" /></label>
+            <label class="field"><span class="field-label">Track gradient (%)</span><input id="dtGradientInput" type="number" step="0.1" value="1.2" /></label>
+            <label class="field"><span class="field-label">Race laps</span><input id="dtRaceLapsInput" type="number" step="1" value="20" /></label>
+            <label class="field"><span class="field-label">Air density (kg/m³)</span><input id="dtAirDensityInput" type="number" step="0.001" value="1.225" /></label>
+            <label class="field"><span class="field-label">Drag coefficient Cd</span><input id="dtDragCoefficientInput" type="number" step="0.01" value="0.9" /></label>
+            <label class="field"><span class="field-label">Frontal area (m²)</span><input id="dtFrontalAreaInput" type="number" step="0.01" value="1.8" /></label>
+            <label class="field"><span class="field-label">Downforce coefficient Cl</span><input id="dtDownforceCoefficientInput" type="number" step="0.01" value="3.4" /></label>
+            <label class="field"><span class="field-label">Aero area (m²)</span><input id="dtAeroAreaInput" type="number" step="0.01" value="2.4" /></label>
+            <label class="field"><span class="field-label">Headwind (m/s)</span><input id="dtHeadwindInput" type="number" step="0.5" value="2.5" /></label>
+            <label class="field"><span class="field-label">Tyre grip</span><input id="dtGripInput" type="number" step="0.01" value="1.8" /></label>
+            <label class="field"><span class="field-label">Tyre wear (%)</span><input id="dtTyreWearInput" type="number" step="1" value="20" /></label>
+            <label class="field"><span class="field-label">Tyre temperature (°C)</span><input id="dtTyreTemperatureInput" type="number" step="1" value="85" /></label>
+            <label class="field"><span class="field-label">Tyre pressure (psi)</span><input id="dtTyrePressureInput" type="number" step="1" value="28" /></label>
+            <label class="field"><span class="field-label">Brake decel (m/s²)</span><input id="dtBrakingDecelerationInput" type="number" step="0.1" value="18" /></label>
+            <label class="field"><span class="field-label">Brake temp (°C)</span><input id="dtBrakeTemperatureInput" type="number" step="1" value="650" /></label>
+            <label class="field"><span class="field-label">Susp stiffness (N/m)</span><input id="dtSuspensionStiffnessInput" type="number" step="1000" value="320000" /></label>
+            <label class="field"><span class="field-label">Susp damping (N·s/m)</span><input id="dtSuspensionDampingInput" type="number" step="100" value="18000" /></label>
+            <label class="field"><span class="field-label">Fuel available (kg)</span><input id="dtFuelKgInput" type="number" step="0.1" value="110" /></label>
+            <label class="field"><span class="field-label">Fuel per lap (kg)</span><input id="dtFuelPerLapInput" type="number" step="0.01" value="1.85" /></label>
+            <label class="field"><span class="field-label">Fuel energy (MJ/kg)</span><input id="dtFuelEnergyInput" type="number" step="0.1" value="42.8" /></label>
+            <label class="field"><span class="field-label">Engine RPM</span><input id="dtEngineRpmInput" type="number" step="100" value="15000" /></label>
+            <label class="field"><span class="field-label">Engine efficiency</span><input id="dtEngineEfficiencyInput" type="number" step="0.01" min="0.01" max="1" value="0.36" /></label>
+            <label class="field"><span class="field-label">Battery energy (kWh)</span><input id="dtBatteryKwhInput" type="number" step="0.5" value="5" /></label>
+            <label class="field"><span class="field-label">Motor power (kW)</span><input id="dtMotorPowerInput" type="number" step="1" value="160" /></label>
+            <label class="field"><span class="field-label">Battery per lap (kWh)</span><input id="dtBatteryUseInput" type="number" step="0.1" value="0.7" /></label>
+            <label class="field"><span class="field-label">Ambient temp (°C)</span><input id="dtAmbientTempInput" type="number" step="1" value="25" /></label>
+            <label class="field"><span class="field-label">Altitude (m)</span><input id="dtAltitudeInput" type="number" step="1" value="60" /></label>
+            <label class="field"><span class="field-label">Headwind factor</span><input id="dtWindFactorInput" type="number" step="0.01" min="0" max="1" value="0.75" /></label>
+          </div>
+        </div>
+        <div class="digital-twin-results">
+          <div class="twin-summary-grid">
+            <div class="analysis-stat"><span>Total mass</span><b id="dtMassResult">—</b></div>
+            <div class="analysis-stat"><span>Wheel power</span><b id="dtWheelPowerResult">—</b></div>
+            <div class="analysis-stat"><span>Engine force</span><b id="dtEngineForceResult">—</b></div>
+            <div class="analysis-stat"><span>Aero drag</span><b id="dtDragResult">—</b></div>
+            <div class="analysis-stat"><span>Downforce</span><b id="dtDownforceResult">—</b></div>
+            <div class="analysis-stat"><span>Corner speed</span><b id="dtCornerSpeedResult">—</b></div>
+            <div class="analysis-stat"><span>Braking distance</span><b id="dtBrakingDistanceResult">—</b></div>
+            <div class="analysis-stat"><span>Lap time</span><b id="dtLapTimeResult">—</b></div>
+            <div class="analysis-stat"><span>Fuel remaining</span><b id="dtFuelRemainingResult">—</b></div>
+            <div class="analysis-stat"><span>Battery remaining</span><b id="dtBatteryRemainingResult">—</b></div>
+            <div class="analysis-stat"><span>Race time</span><b id="dtRaceTimeResult">—</b></div>
+            <div class="analysis-stat"><span>Corner density</span><b id="dtCornerDensityResult">—</b></div>
+          </div>
+          <div class="digital-twin-status" id="digitalTwinStatus">Enter values to calculate the live digital twin.</div>
+        </div>
       </div>
     </section>
 

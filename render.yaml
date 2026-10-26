@@ -3,11 +3,11 @@ services:
     name: apex-lap-lab
     runtime: python
     plan: free
-    region: oregon
     buildCommand: pip install -r requirements.txt
     startCommand: python api_server.py
     healthCheckPath: /api/status
-    autoDeploy: true
     envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
       - key: HOST
         value: 0.0.0.0

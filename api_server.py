@@ -148,7 +148,7 @@ class LapLabHandler(SimpleHTTPRequestHandler):
         year, event, session_name, session = self.requested_session(params)
         driver = params.get("driver", "").strip().upper()
         try:
-            count = int(params.get("count", "5"))
+            count = int(params.get("count", "1"))
         except ValueError as error:
             raise ValueError("Choose a lap count of 1, 3, 5, or 10.") from error
         if count not in (1, 3, 5, 10):
@@ -191,6 +191,7 @@ class LapLabHandler(SimpleHTTPRequestHandler):
                     "x": json_value(sample["X"]),
                     "y": json_value(sample["Y"]),
                     "t": round(float(elapsed[row_index] / elapsed_span), 6),
+                    "timeMs": round(float(elapsed[row_index]) * 1000, 3),
                     "speed": json_value(sample["Speed"]),
                     "throttle": json_value(sample["Throttle"]),
                     "brake": json_value(sample.get("Brake")),
